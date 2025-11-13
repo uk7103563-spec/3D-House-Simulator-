@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional 3D House Configurator</title>
+    
+    <!-- Three.js Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Three.js Add-ons -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/ExtrudeGeometry.js"></script>
+    
+    <!-- *** NEW: GLTF Exporter Script *** -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* Custom styles to ensure 3D container fills space and prevents horizontal scrolling */
+        body { 
+            margin: 0; 
+            font-family: 'Inter', sans-serif; 
+        }
+        .main-layout {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-color: #1a202c; /* Dark base color */
+        }
+        @media (min-width: 1024px) {
+            .main-layout { 
+                flex-direction: row; 
+                height: 100vh; /* Move height and overflow here */
+                overflow: hidden;
+            }
+        }
+        
+        #threeD-container {
+            flex-grow: 1;
+            height: 70vh; /* Give a fixed height for mobile */
+        }
+        @media (min-width: 1024px) {
+            #threeD-container {
+                height: 100vh; /* Fill screen on desktop */
+            }
+        }
+        canvas { 
+            display: block; 
+        }
+        .custom-scroll::-webkit-scrollbar { 
+            width: 8px; 
+        }
+        .custom-scroll::-webkit-scrollbar-track { 
+            background: #2d3748; 
+        }
+        .custom-scroll::-webkit-scrollbar-thumb { 
+            background: #4a5568; 
+            border-radius: 4px; 
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { 
+            background: #718096; 
+        }
+        /* Style for disabled controls */
+        select:disabled, input:disabled {
+            background: #4a5568;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        label.disabled, div.disabled {
+            opacity: 0.5;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary-bg': '#1a202c',
+                        'secondary-bg': '#2d3748',
+                        'accent': '#4299e1',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-primary-bg text-gray-100">
+
+    <div class="main-layout">
+        <!-- *** MODIFIED: max-h-screen is now lg:max-h-screen *** -->
+        <div id="controls-panel" class="lg:w-96 p-6 bg-secondary-bg shadow-2xl lg:overflow-y-auto custom-scroll lg:max-h-screen">
+            <h1 class="text-3xl font-bold text-white mb-6 border-b border-gray-600 pb-3">Client House Builder (3D)</h1>
+            
+            <div class="space-y-6">
+                
+                <div class="p-4 bg-gray-700 rounded-lg shadow-md space-y-3">
+                    <h2 class="text-lg font-semibold text-white">Structure</h2>
+                    <div>
+                        <label for="floor_count" class="block text-sm font-medium text-gray-300 mb-1">Number of Floors (1-10)</label>
+                        <select id="floor_count" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                            <option value="1">1</option>
+                            <option value="2" selected>2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="home_shape" class="block text-sm font-medium text-gray-300 mb-1">Home Shape</label>
+                        <select id="home_shape" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                            <option value="rectangular" selected>Rectangular / Square</option>
+                            <option value="l_shape">L-Shape</option>
+                            <option value="circular">Circular (Cylinder)</option>
+                            <option value="donut">Donut (Courtyard)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="shape" id="roof_type_label" class="block text-sm font-medium text-gray-300 mb-1">Roof Type</label>
+                        <select id="shape" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                            <option value="box">Box (Flat Roof)</option>
+                            <option value="pitched_gable">Pitched Roof (Gable)</option>
+                            <option value="pitched_pyramid">Pitched Roof (Pyramid)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gray-700 rounded-lg shadow-md grid grid-cols-2 gap-4">
+                    <h2 class="col-span-2 text-lg font-semibold text-white">Dimensions (Meters)</h2>
+                    <div>
+                        <label for="length" class="block text-sm font-medium text-gray-300">Length (X) / Diameter</label>
+                        <input type="number" id="length" value="20" min="5" max="50" step="1" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                    <div>
+                        <label for="width" id="width_label" class="block text-sm font-medium text-gray-300">Width (Z)</label>
+                        <input type="number" id="width" value="15" min="5" max="50" step="1" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                    <div class="col-span-2">
+                        <label for="height" class="block text-sm font-medium text-gray-300">Height per Floor (Y)</label>
+                        <input type="number" id="height" value="3.5" min="2.5" max="5" step="0.5" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gray-700 rounded-lg shadow-md grid grid-cols-2 gap-4">
+                    <h2 class="col-span-2 text-lg font-semibold text-white">Features & Layout</h2>
+                    <div>
+                        <label for="room_count" class="block text-sm font-medium text-gray-300">Rooms per Floor (1-4)</label>
+                        <input type="number" id="room_count" value="3" min="1" max="4" step="1" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                    <div>
+                        <label for="wall_thickness" class="block text-sm font-medium text-gray-300">Wall Thickness (m)</label>
+                        <input type="number" id="wall_thickness" value="0.2" min="0.1" max="1" step="0.05" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                    <div>
+                        <label for="door_count" class="block text-sm font-medium text-gray-300">Exterior Doors</label>
+                        <input type="number" id="door_count" value="1" min="0" max="6" step="1" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                    <div>
+                        <label for="window_count" class="block text-sm font-medium text-gray-300">Windows (per side)</label>
+                        <input type="number" id="window_count" value="2" min="0" max="8" step="1" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                    
+                    <div class="col-span-2">
+                        <label for="door_facing" id="door_facing_label" class="block text-sm font-medium text-gray-300 mb-1">Main Door Facing (Rect. Only)</label>
+                        <select id="door_facing" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                            <option value="front">Front (+Z)</option>
+                            <option value="back">Back (-Z)</option>
+                            <option value="right">Right (+X)</option>
+                            <option value="left">Left (-X)</option>
+                        </select>
+                    </div>
+
+                    <div class="col-span-2 flex items-center justify-between mt-2">
+                        <label for="show_internal_walls" id="internal_layout_label" class="text-sm font-medium text-gray-300">Show Internal Layout</label>
+                        <input type="checkbox" id="show_internal_walls" checked class="h-5 w-5 text-accent rounded border-gray-500 focus:ring-accent">
+                    </div>
+                    
+                    <div id="room-config-panel" class="col-span-2 space-y-3 pt-4 mt-4 border-t border-gray-600">
+                        <h3 class="text-md font-semibold text-white">Configure Rooms</h3>
+                        
+                        <div id="room-1-wrapper">
+                            <label for="room_type_1" class="block text-sm font-medium text-gray-300">Room 1 (Top-Left / NW)</label>
+                            <select id="room_type_1" class="room-type-select w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                                <option value="HALL" selected>Hall/Living</option>
+                                <option value="KITCHEN">Kitchen</option>
+                                <option value="BEDROOM">Bedroom</option>
+                                <option value="BATHROOM">Bathroom</option>
+                            </select>
+                        </div>
+                        
+                        <div id="room-2-wrapper">
+                            <label for="room_type_2" class="block text-sm font-medium text-gray-300">Room 2 (Top-Right / NE)</label>
+                            <select id="room_type_2" class="room-type-select w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                                <option value="HALL">Hall/Living</option>
+                                <option value="KITCHEN" selected>Kitchen</option>
+                                <option value="BEDROOM">Bedroom</option>
+                                <option value="BATHROOM">Bathroom</option>
+                            </select>
+                        </div>
+                        
+                        <div id="room-3-wrapper">
+                            <label for="room_type_3" class="block text-sm font-medium text-gray-300">Room 3 (Bottom-Right / SE)</label>
+                            <select id="room_type_3" class="room-type-select w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                                <option value="HALL">Hall/Living</option>
+                                <option value="KITCHEN">Kitchen</option>
+                                <option value="BEDROOM" selected>Bedroom</option>
+                                <option value="BATHROOM">Bathroom</option>
+                            </select>
+                        </div>
+                        
+                        <div id="room-4-wrapper">
+                            <label for="room_type_4" class="block text-sm font-medium text-gray-300">Room 4 (Bottom-Left / SW)</label>
+                            <select id="room_type_4" class="room-type-select w-full p-2 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                                <option value="HALL">Hall/Living</option>
+                                <option value="KITCHEN">Kitchen</option>
+                                <option value="BEDROOM">Bedroom</option>
+                                <option value="BATHROOM" selected>Bathroom</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gray-700 rounded-lg shadow-md grid grid-cols-2 gap-4">
+                    <h2 class="col-span-2 text-lg font-semibold text-white">Compound Wall</h2>
+                    
+                    <div class="col-span-2 flex items-center justify-between mt-2">
+                        <label for="show_compound_wall" class="text-sm font-medium text-gray-300">Show Compound Wall</label>
+                        <input type="checkbox" id="show_compound_wall" checked class="h-5 w-5 text-accent rounded border-gray-500 focus:ring-accent">
+                    </div>
+                    <div>
+                        <label for="compound_wall_distance" class="block text-sm font-medium text-gray-300">Wall Distance (m)</label>
+                        <input type="number" id="compound_wall_distance" value="10" min="1" max="50" step="1" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                    <div>
+                        <label for="compound_wall_height" class="block text-sm font-medium text-gray-300">Wall Height (m)</label>
+                        <input type="number" id="compound_wall_height" value="2" min="1" max="5" step="0.5" class="w-full p-2 mt-1 bg-gray-600 border border-gray-500 rounded-md focus:ring-accent focus:border-accent">
+                    </div>
+                </div>
+
+                <!-- *** MODIFIED: Buttons grouped together *** -->
+                <div class="space-y-4">
+                    <button id="updateModel" class="w-full py-3 bg-accent hover:bg-blue-600 rounded-lg font-bold text-lg transition duration-150 shadow-lg shadow-blue-500/50">
+                        Update Configuration
+                    </button>
+                    <!-- *** NEW: Download Button *** -->
+                    <button id="downloadModel" class="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-lg transition duration-150 shadow-lg shadow-green-500/50">
+                        Download Model (GLTF)
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-8 pt-4 border-t border-gray-600">
+                <h2 class="text-xl font-semibold text-white mb-3">Model Calculations</h2>
+                <div class="space-y-2 text-sm text-gray-300" id="calculation-output">
+                    <p><strong class="text-blue-400">Number of Floors:</strong> <span id="floor-out">0</span></p>
+                    <p><strong class="text-blue-400">Total House Footprint:</strong> <span id="footprint-area">0.00</span> m²</p>
+                    <p><strong class="text-blue-400">Total Floor Area:</strong> <span id="floor-area">0.00</span> m²</p>
+                    <p><strong class="text-blue-400">Avg. Room Footprint:</strong> <span id="room-area">0.00</span> m²</p>
+                    <p><strong class="text-blue-400">Total Wall Surface Area:</strong> <span id="wall-surface-area">0.00</span> m²</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="threeD-container" class="lg:flex-1 relative">
+             <div class="absolute top-4 left-4 p-2 bg-black/50 text-white rounded-lg text-sm z-10">
+                Drag to Rotate, Scroll to Zoom
+             </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global Initialization ---
+        let scene, camera, renderer, controls;
+        let houseMesh = new THREE.Group();
+        const GROUND_Y = 0; 
+        
+        // Material definitions
+        const MATERIALS = {
+            WALL: new THREE.MeshStandardMaterial({ 
+                color: 0xF3F4F6, 
+                metalness: 0.1, 
+                roughness: 0.9, 
+                transparent: true, 
+                opacity: 0.85, 
+                side: THREE.DoubleSide 
+            }),
+            INTERNAL_WALL: new THREE.MeshStandardMaterial({
+                color: 0xE5E7EB, 
+                metalness: 0.1,
+                roughness: 0.9,
+                transparent: false, 
+                side: THREE.DoubleSide
+            }),
+            ROOF: new THREE.MeshStandardMaterial({ color: 0xDC2626, metalness: 0.3, roughness: 0.7 }), 
+            FLOOR: new THREE.MeshStandardMaterial({ color: 0x4B5563, metalness: 0.1, roughness: 0.5 }), 
+            DOOR: new THREE.MeshStandardMaterial({ color: 0x8B4513, metalness: 0.1, roughness: 0.8 }), 
+            WINDOW: new THREE.MeshStandardMaterial({ color: 0xADD8E6, transparent: true, opacity: 0.6, metalness: 0.2, roughness: 0.1 }), 
+            FURNITURE: {
+                HALL: new THREE.MeshStandardMaterial({ color: 0x22c55e }), 
+                KITCHEN: new THREE.MeshStandardMaterial({ color: 0xfb923c }), 
+                BEDROOM: new THREE.MeshStandardMaterial({ color: 0x3b82f6 }), 
+                BATHROOM: new THREE.MeshStandardMaterial({ color: 0x8b5cf6 }), 
+            },
+            COMPOUND_WALL: new THREE.MeshStandardMaterial({ color: 0xAAAAAA, metalness: 0.1, roughness: 0.9, side: THREE.DoubleSide })
+        };
+
+        /** Creates a Mesh with PBR material, position, and shadows. */
+        function createMesh(geometry, material, x, y, z) {
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        /** Creates a simple textured mesh for the ground. */
+        function createGround(length, width) {
+            const size = Math.max(length, width) * 4;
+            const groundGeometry = new THREE.PlaneGeometry(size, size);
+            const groundMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x6AA84F, 
+                side: THREE.DoubleSide 
+            });
+            
+            const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.position.y = GROUND_Y - 0.05;
+            groundMesh.receiveShadow = true;
+            return groundMesh;
+        }
+
+        /** Places simple furniture blocks to define room types */
+        function addInteriorRoomBlock(length, width, floorHeight, roomIndex, floorLevel, roomType) {
+            if (roomIndex < 1 || roomIndex > 4) return;
+            
+            const roomSizeX = length / 4;
+            const roomSizeZ = width / 4;
+            
+            // 1=NW, 2=NE, 3=SE, 4=SW
+            const centers = [
+                new THREE.Vector3(-roomSizeX, 0, roomSizeZ),  // 1: NW
+                new THREE.Vector3(roomSizeX, 0, roomSizeZ),   // 2: NE
+                new THREE.Vector3(roomSizeX, 0, -roomSizeZ),  // 3: SE
+                new THREE.Vector3(-roomSizeX, 0, -roomSizeZ), // 4: SW
+            ];
+
+            const roomMaterial = MATERIALS.FURNITURE[roomType];
+            if (!roomMaterial) {
+                console.warn(`Invalid room type: ${roomType}`);
+                return;
+            }
+
+            let roomLabel = "Room";
+            switch (roomType) {
+                case 'HALL': roomLabel = "Hall/Living"; break;
+                case 'KITCHEN': roomLabel = "Kitchen"; break;
+                case 'BEDROOM': roomLabel = "Bedroom"; break;
+                case 'BATHROOM': roomLabel = "Bathroom"; break;
+            }
+
+            const roomCenter = centers[roomIndex - 1];
+            if (!roomCenter) return; 
+            
+            const furnitureGeom = new THREE.BoxGeometry(length / 8, floorHeight / 2, width / 8);
+            
+            const furnitureBlock = createMesh(furnitureGeom, roomMaterial, roomCenter.x, 0, roomCenter.z);
+            furnitureBlock.position.y = floorLevel + floorHeight / 4; 
+            houseMesh.add(furnitureBlock);
+
+            const sprite = makeTextSprite(`${roomLabel} - F${Math.round(floorLevel / floorHeight) + 1}`, new THREE.Vector3(roomCenter.x, 0, roomCenter.z), '#FFFFFF', 0.6);
+            sprite.position.y = floorLevel + floorHeight - 0.5; 
+            houseMesh.add(sprite);
+        }
+
+        /** Helper to create 3D text labels */
+        function makeTextSprite(message, position, color = '#FFFFFF', size = 0.5) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const fontSize = 80;
+            const padding = 10;
+            
+            context.font = `bold ${fontSize}px Arial`;
+            const metrics = context.measureText(message);
+            canvas.width = metrics.width + 2 * padding;
+            canvas.height = fontSize + 2 * padding;
+
+            context.font = `bold ${fontSize}px Arial`;
+            context.fillStyle = '#000000AA';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = color;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(message, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            const aspectRatio = canvas.width / canvas.height;
+            sprite.scale.set(size * aspectRatio, size, 1);
+            
+            if (position) {
+                sprite.position.set(position.x, 0, position.z); 
+            }
+            return sprite;
+        }
+
+        /** Adds doors and windows to the exterior walls */
+        function addDoorsAndWindows(length, width, floorHeight, doorCount, windowCount, wallThickness, floorLevel, doorFacing, homeShape) {
+            const doorHeight = 2.2;
+            const doorWidth = 1.0;
+            const windowWidth = 1.5;
+            const windowHeight = 1.5;
+            const windowYOffset = 1.0; 
+
+            // Rectangular and L-Shape use the same bounding-box logic
+            if (homeShape === 'rectangular' || homeShape === 'l_shape') {
+                const halfLength = length / 2;
+                const halfWidth = width / 2;
+
+                if (doorCount > 0) {
+                    let doorGeom, xPos, zPos;
+                    const doorY = floorLevel + doorHeight / 2;
+
+                    switch (doorFacing) {
+                        case 'front': // +Z
+                            doorGeom = new THREE.BoxGeometry(doorWidth, doorHeight, wallThickness * 1.5);
+                            zPos = halfWidth;
+                            for (let i = 0; i < doorCount; i++) {
+                                xPos = (length / (doorCount + 1)) * (i + 1) - halfLength;
+                                houseMesh.add(createMesh(doorGeom, MATERIALS.DOOR, xPos, doorY, zPos));
+                            }
+                            break;
+                        case 'back': // -Z
+                            doorGeom = new THREE.BoxGeometry(doorWidth, doorHeight, wallThickness * 1.5);
+                            zPos = -halfWidth;
+                            for (let i = 0; i < doorCount; i++) {
+                                xPos = (length / (doorCount + 1)) * (i + 1) - halfLength;
+                                houseMesh.add(createMesh(doorGeom, MATERIALS.DOOR, xPos, doorY, zPos));
+                            }
+                            break;
+                        case 'right': // +X
+                            doorGeom = new THREE.BoxGeometry(wallThickness * 1.5, doorHeight, doorWidth);
+                            xPos = halfLength;
+                            for (let i = 0; i < doorCount; i++) {
+                                zPos = (width / (doorCount + 1)) * (i + 1) - halfWidth;
+                                houseMesh.add(createMesh(doorGeom, MATERIALS.DOOR, xPos, doorY, zPos));
+                            }
+                            break;
+                        case 'left': // -X
+                            doorGeom = new THREE.BoxGeometry(wallThickness * 1.5, doorHeight, doorWidth);
+                            xPos = -halfLength;
+                            for (let i = 0; i < doorCount; i++) {
+                                zPos = (width / (doorCount + 1)) * (i + 1) - halfWidth;
+                                houseMesh.add(createMesh(doorGeom, MATERIALS.DOOR, xPos, doorY, zPos));
+                            }
+                            break;
+                    }
+                }
+
+                // Window Placement (On all 4 exterior walls of bounding box)
+                for (let i = 0; i < windowCount; i++) {
+                    const pos = (length / (windowCount + 1)) * (i + 1) - halfLength;
+                    const winY = floorLevel + windowYOffset + windowHeight / 2;
+
+                    let window1 = createMesh(new THREE.BoxGeometry(windowWidth, windowHeight, wallThickness * 0.5), MATERIALS.WINDOW, pos, winY, halfWidth + wallThickness / 2);
+                    houseMesh.add(window1);
+
+                    let window2 = createMesh(new THREE.BoxGeometry(windowWidth, windowHeight, wallThickness * 0.5), MATERIALS.WINDOW, pos, winY, -halfWidth - wallThickness / 2);
+                    houseMesh.add(window2);
+                    
+                    const posZ = (width / (windowCount + 1)) * (i + 1) - halfWidth;
+                    let window3 = createMesh(new THREE.BoxGeometry(wallThickness * 0.5, windowHeight, windowWidth), MATERIALS.WINDOW, -halfLength - wallThickness / 2, winY, posZ);
+                    houseMesh.add(window3);
+
+                    let window4 = createMesh(new THREE.BoxGeometry(wallThickness * 0.5, windowHeight, windowWidth), MATERIALS.WINDOW, halfLength + wallThickness / 2, winY, posZ);
+                    houseMesh.add(window4);
+                }
+
+            } else if (homeShape === 'circular' || homeShape === 'donut') {
+                
+                let innerRadius = (homeShape === 'donut') ? (width / 2) : (length / 2);
+                if (homeShape === 'circular') innerRadius = length / 2;
+                
+                const wallRadius = innerRadius + wallThickness / 2; 
+
+                if (doorCount > 0) {
+                    const doorGeom = new THREE.BoxGeometry(wallThickness * 1.5, doorHeight, doorWidth); 
+                    for (let i = 0; i < doorCount; i++) {
+                        const angle = (Math.PI * 2 / doorCount) * i;
+                        const xPos = Math.cos(angle) * wallRadius;
+                        const zPos = Math.sin(angle) * wallRadius;
+                        const doorY = floorLevel + doorHeight / 2;
+                        
+                        const door = createMesh(doorGeom.clone(), MATERIALS.DOOR, xPos, doorY, zPos);
+                        door.rotation.y = -angle; 
+                        houseMesh.add(door);
+                    }
+                }
+
+                const totalWindows = windowCount * 4; 
+                if (totalWindows > 0) {
+                    const winGeom = new THREE.BoxGeometry(wallThickness * 1.5, windowHeight, windowWidth); 
+                    for (let i = 0; i < totalWindows; i++) {
+                        const angle = (Math.PI * 2 / totalWindows) * i + (Math.PI / totalWindows); 
+                        const xPos = Math.cos(angle) * wallRadius;
+                        const zPos = Math.sin(angle) * wallRadius;
+                        const winY = floorLevel + windowYOffset + windowHeight / 2;
+                        
+                        const window = createMesh(winGeom.clone(), MATERIALS.WINDOW, xPos, winY, zPos);
+                        window.rotation.y = -angle; 
+                        houseMesh.add(window);
+                    }
+                }
+            }
+        }
+        
+        /** Builds the internal layout for a rectangular or L-Shape grid */
+        function addInteriorLayout(length, width, floorHeight, roomCount, wallThickness, floorLevel, showBlocks, homeShape, roomTypes) {
+            
+            if (homeShape === 'circular' || homeShape === 'donut') {
+                 return; // This function is not for radial layouts
+            }
+
+            const wallY = floorLevel + floorHeight / 2;
+            const doorMat = MATERIALS.DOOR;
+            const doorWidth = 1.0;
+            const doorHeight = 2.2;
+            const doorY = floorLevel + doorHeight / 2;
+
+            if (homeShape === 'l_shape') {
+                // --- L-SHAPE ---
+                // Only has 3 rooms: NW(1), SW(4), SE(3). NE(2) is empty.
+                
+                // 1. Blocks
+                if (showBlocks) {
+                    addInteriorRoomBlock(length, width, floorHeight, 1, floorLevel, roomTypes[0]); // NW
+                    addInteriorRoomBlock(length, width, floorHeight, 3, floorLevel, roomTypes[2]); // SE
+                    addInteriorRoomBlock(length, width, floorHeight, 4, floorLevel, roomTypes[3]); // SW
+                }
+
+                // 2. Walls (roomCount is capped at 3)
+                if (roomCount === 1) return; // Open L-plan
+
+                // Wall 1: Splits SW and SE (Vertical, bottom half)
+                const wallGeomZ = new THREE.BoxGeometry(wallThickness, floorHeight, width / 2);
+                houseMesh.add(createMesh(wallGeomZ, MATERIALS.INTERNAL_WALL, 0, wallY, -width / 4));
+                // Door for Wall 1
+                const doorGeomZ = new THREE.BoxGeometry(wallThickness * 1.5, doorHeight, doorWidth);
+                houseMesh.add(createMesh(doorGeomZ, doorMat, 0, doorY, -width / 2 + doorWidth));
+
+                if (roomCount === 3) {
+                    // Wall 2: Splits NW and SW (Horizontal, left half)
+                    const wallGeomX = new THREE.BoxGeometry(length / 2, floorHeight, wallThickness);
+                    houseMesh.add(createMesh(wallGeomX, MATERIALS.INTERNAL_WALL, -length / 4, wallY, 0));
+                    // Door for Wall 2
+                    const doorGeomX = new THREE.BoxGeometry(doorWidth, doorHeight, wallThickness * 1.5);
+                    houseMesh.add(createMesh(doorGeomX, doorMat, -length / 2 + doorWidth, doorY, 0));
+                }
+            } else {
+                // --- RECTANGULAR ---
+                
+                // 1. Blocks
+                if (showBlocks) {
+                    addInteriorRoomBlock(length, width, floorHeight, 1, floorLevel, roomTypes[0]); // NW
+                    addInteriorRoomBlock(length, width, floorHeight, 2, floorLevel, roomTypes[1]); // NE
+                    addInteriorRoomBlock(length, width, floorHeight, 3, floorLevel, roomTypes[2]); // SE
+                    addInteriorRoomBlock(length, width, floorHeight, 4, floorLevel, roomTypes[3]); // SW
+                }
+
+                // 2. Walls
+                if (roomCount === 1) return; // Open plan
+
+                // -- Wall 1 (Splits house in 2, along X-axis at Z=0) --
+                if (roomCount >= 2) {
+                    const wallGeomX = new THREE.BoxGeometry(length, floorHeight, wallThickness);
+                    houseMesh.add(createMesh(wallGeomX, MATERIALS.INTERNAL_WALL, 0, wallY, 0));
+                    const doorGeom = new THREE.BoxGeometry(doorWidth, doorHeight, wallThickness * 1.5);
+                    houseMesh.add(createMesh(doorGeom, doorMat, length / 4, doorY, 0));
+                }
+
+                // -- Wall 2 (Splits house in 4, along Z-axis at X=0) --
+                if (roomCount === 4) {
+                    const wallGeomZ = new THREE.BoxGeometry(wallThickness, floorHeight, width);
+                    houseMesh.add(createMesh(wallGeomZ, MATERIALS.INTERNAL_WALL, 0, wallY, 0));
+                    const doorGeom = new THREE.BoxGeometry(wallThickness * 1.5, doorHeight, doorWidth);
+                    houseMesh.add(createMesh(doorGeom, doorMat, 0, doorY, width / 4));
+                }
+                
+                // -- Wall 3 (Splits one half for 3-room layout) --
+                if (roomCount === 3) {
+                    const wallGeomZHalf = new THREE.BoxGeometry(wallThickness, floorHeight, width / 2);
+                    houseMesh.add(createMesh(wallGeomZHalf, MATERIALS.INTERNAL_WALL, 0, wallY, width / 4));
+                    const doorGeom = new THREE.BoxGeometry(wallThickness * 1.5, doorHeight, doorWidth);
+                    houseMesh.add(createMesh(doorGeom, doorMat, 0, doorY, width / 2 - doorWidth));
+                }
+            }
+        }
+
+        /** Builds a radial internal layout for circular shapes */
+        function addRadialInteriorLayout(length, width, floorHeight, roomCount, wallThickness, floorLevel, showBlocks, homeShape, roomTypes) {
+            const outerRadius = (homeShape === 'donut') ? length / 2 : (length / 2) + wallThickness;
+            let innerRadius = (homeShape === 'donut') ? width / 2 : (homeShape === 'circular' ? 0.01 : length / 2); // 0.01 to avoid z-fighting at center
+            
+            if (homeShape === 'circular') innerRadius = 0.01; // Force walls to center for circular
+
+            const wallHeight = floorHeight;
+            const wallY = floorLevel + wallHeight / 2;
+            const anglePerRoom = (Math.PI * 2) / roomCount;
+
+            for (let i = 0; i < roomCount; i++) {
+                const angle = anglePerRoom * i;
+                
+                // 1. Radial Walls
+                const wallLength = (outerRadius - innerRadius);
+                const wallGeom = new THREE.BoxGeometry(wallLength, wallHeight, wallThickness);
+                const wall = createMesh(wallGeom, MATERIALS.INTERNAL_WALL, 0, 0, 0);
+                wall.rotation.y = -angle; // Align with angle
+                wall.position.set(
+                    Math.cos(angle) * (innerRadius + wallLength / 2),
+                    wallY,
+                    Math.sin(angle) * (innerRadius + wallLength / 2)
+                );
+                houseMesh.add(wall);
+
+                // 2. Add Blocks
+                if (showBlocks) {
+                    const roomType = roomTypes[i % 4]; // Cycle through the 4 configured types
+                    const material = MATERIALS.FURNITURE[roomType] || MATERIALS.FURNITURE.HALL;
+                    
+                    // Pie-slice geometry
+                    const blockGeom = new THREE.CylinderGeometry(
+                        outerRadius * 0.8, // Slightly smaller than outer wall
+                        innerRadius + (outerRadius * 0.1), // Slightly larger than inner wall
+                        floorHeight / 2, // Block height
+                        8, // Segments
+                        1,
+                        false, // Open-ended
+                        -angle - (anglePerRoom * 0.9) / 2 - (anglePerRoom * 0.05) - (anglePerRoom/2), // thetaStart (small gap)
+                        anglePerRoom * 0.9 // thetaLength (small gap)
+                    );
+                    
+                    const block = createMesh(blockGeom, material, 0, floorLevel + floorHeight / 4, 0);
+                    block.rotation.y = Math.PI / 2; // Align cylinder to start
+                    houseMesh.add(block);
+                }
+            }
+        }
+
+
+        /** Helper function to create hollow shapes for walls/slabs */
+        function createHollowExtrude(shapePoints, holePoints, extrudeSettings) {
+            const shape = new THREE.Shape();
+            shape.moveTo(shapePoints[0].x, shapePoints[0].y);
+            for (let i = 1; i < shapePoints.length; i++) {
+                shape.lineTo(shapePoints[i].x, shapePoints[i].y);
+            }
+
+            if (holePoints && holePoints.length > 0) {
+                const hole = new THREE.Path();
+                hole.moveTo(holePoints[0].x, holePoints[0].y);
+                for (let i = 1; i < holePoints.length; i++) {
+                    hole.lineTo(holePoints[i].x, holePoints[i].y);
+                }
+                shape.holes.push(hole);
+            }
+            
+            return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        }
+
+        /** Builds the exterior walls, floor slabs, and roof */
+        function createHouseStructure(length, width, floorCount, floorHeight, slabThickness, wallThickness, shape, homeShape) {
+            
+            // --- Calculations for L-Shape footprint ---
+            let l_shape_outer, l_shape_hole;
+            const hL = length / 2;
+            const hW = width / 2;
+            const wt = wallThickness;
+
+            // L-Shape (Removes top-right quadrant)
+            l_shape_outer = [
+                new THREE.Vector2(-hL, -hW), new THREE.Vector2(hL, -hW),
+                new THREE.Vector2(hL, 0),    new THREE.Vector2(0, 0),
+                new THREE.Vector2(0, hW),    new THREE.Vector2(-hL, hW),
+                new THREE.Vector2(-hL, -hW)
+            ];
+             l_shape_hole = [
+                new THREE.Vector2(-hL + wt, -hW + wt), new THREE.Vector2(hL - wt, -hW + wt),
+                new THREE.Vector2(hL - wt, 0 - wt),    new THREE.Vector2(0 + wt, 0 - wt),
+                new THREE.Vector2(0 + wt, hW - wt),    new THREE.Vector2(-hL + wt, hW - wt),
+                new THREE.Vector2(-hL + wt, -hW + wt)
+            ];
+
+
+            if (homeShape === 'rectangular') {
+                const halfLength = length / 2;
+                const halfWidth = width / 2;
+
+                const baseFloorGeom = new THREE.BoxGeometry(length + wallThickness * 2, slabThickness, width + wallThickness * 2);
+                const baseFloor = createMesh(baseFloorGeom, MATERIALS.FLOOR, 0, GROUND_Y + slabThickness / 2, 0);
+                houseMesh.add(baseFloor);
+
+                for (let floor = 0; floor < floorCount; floor++) {
+                    const floorLevel = (slabThickness / 2) + (floor * (floorHeight + slabThickness)); 
+                    const currentFloorHeight = floorHeight;
+                    const wallY = floorLevel + (slabThickness / 2) + (currentFloorHeight / 2); 
+
+                    const wallGeomX = new THREE.BoxGeometry(length + wallThickness * 2, currentFloorHeight, wallThickness);
+                    const wallGeomZ = new THREE.BoxGeometry(wallThickness, currentFloorHeight, width);
+
+                    houseMesh.add(createMesh(wallGeomX, MATERIALS.WALL, 0, wallY, halfWidth + wallThickness / 2)); // Front
+                    houseMesh.add(createMesh(wallGeomX, MATERIALS.WALL, 0, wallY, -halfWidth - wallThickness / 2)); // Back
+                    houseMesh.add(createMesh(wallGeomZ, MATERIALS.WALL, halfLength + wallThickness / 2, wallY, 0));  // Right
+                    houseMesh.add(createMesh(wallGeomZ, MATERIALS.WALL, -halfLength + wallThickness / 2, wallY, 0)); // Left
+
+                    if (floor < floorCount - 1) { 
+                        const middleSlabGeom = new THREE.BoxGeometry(length + wallThickness * 2, slabThickness, width + wallThickness * 2);
+                        const middleSlab = createMesh(middleSlabGeom, MATERIALS.FLOOR, 0, floorLevel + currentFloorHeight + (slabThickness / 2), 0);
+                        houseMesh.add(middleSlab);
+                    }
+                }
+
+                // --- Rectangular Roof ---
+                const roofLevelY = (slabThickness / 2) + (floorCount * (floorHeight + slabThickness)) - (slabThickness / 2);
+                const roofHeight = floorHeight * 0.7; 
+                
+                if (shape === 'pitched_pyramid') {
+                    const roofGeom = new THREE.ConeGeometry(Math.max(length, width) / 2 + wallThickness, roofHeight, 4);
+                    const roof = createMesh(roofGeom, MATERIALS.ROOF, 0, roofLevelY + roofHeight / 2, 0);
+                    roof.rotation.y = Math.PI / 4;
+                    houseMesh.add(roof);
+
+                } else if (shape === 'pitched_gable') {
+                    const roofGeom = new THREE.BufferGeometry();
+                    const baseOuterL = halfLength + wallThickness;
+                    const baseOuterW = halfWidth + wallThickness;
+                    
+                    const vertices = new Float32Array( [
+                        -baseOuterL, 0,  baseOuterW, 
+                         baseOuterL, 0,  baseOuterW, 
+                        -baseOuterL, 0, -baseOuterW, 
+                         baseOuterL, 0, -baseOuterW, 
+                        -baseOuterL, roofHeight, 0, 
+                         baseOuterL, roofHeight, 0  
+                    ] );
+                    const indices = [ 0, 1, 5,   0, 5, 4, 2, 3, 5,   2, 5, 4, 0, 2, 4, 1, 3, 5 ];
+                    
+                    roofGeom.setIndex( indices );
+                    roofGeom.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+                    roofGeom.computeVertexNormals(); 
+                    
+                    const roof = new THREE.Mesh(roofGeom, MATERIALS.ROOF);
+                    roof.position.y = roofLevelY; 
+                    roof.castShadow = true;
+                    roof.receiveShadow = true;
+                    houseMesh.add(roof);
+
+                } else {
+                    // Flat Roof (Box)
+                    const flatRoofGeom = new THREE.BoxGeometry(length + wallThickness * 2, slabThickness, width + wallThickness * 2);
+                    houseMesh.add(createMesh(flatRoofGeom, MATERIALS.ROOF, 0, roofLevelY + slabThickness / 2, 0));
+                }
+
+            } else if (homeShape === 'circular' || homeShape === 'donut') {
+                // --- Circular / Donut Structure ---
+                const outerRadius = (homeShape === 'donut') ? length / 2 : (length / 2) + wallThickness;
+                const innerRadius = (homeShape === 'donut') ? width / 2 : length / 2;
+
+                const wallShape = new THREE.Shape();
+                wallShape.absarc(0, 0, outerRadius, 0, Math.PI * 2, false); 
+                const wallHole = new THREE.Path();
+                wallHole.absarc(0, 0, innerRadius, 0, Math.PI * 2, true); 
+                wallShape.holes.push(wallHole);
+                
+                const wallExtrudeSettings = { steps: 1, depth: floorHeight, bevelEnabled: false };
+                const wallGeom = new THREE.ExtrudeGeometry(wallShape, wallExtrudeSettings);
+                
+                const slabGeom = (homeShape === 'donut') ?
+                    new THREE.ExtrudeGeometry(wallShape, { steps: 1, depth: slabThickness, bevelEnabled: false }) :
+                    new THREE.CylinderGeometry(outerRadius, outerRadius, slabThickness, 64);
+                
+                // 1. Initial Floor Slab
+                const baseFloor = new THREE.Mesh(slabGeom, MATERIALS.FLOOR);
+                if (homeShape === 'donut') {
+                    baseFloor.rotation.x = -Math.PI / 2;
+                    baseFloor.position.y = GROUND_Y + slabThickness;
+                } else {
+                    baseFloor.position.y = GROUND_Y + slabThickness / 2;
+                }
+                baseFloor.castShadow = true;
+                baseFloor.receiveShadow = true;
+                houseMesh.add(baseFloor);
+
+                for (let floor = 0; floor < floorCount; floor++) {
+                    const floorLevel = (slabThickness) + (floor * (floorHeight + slabThickness));
+                    
+                    // 2. Exterior Walls
+                    const wallMesh = new THREE.Mesh(wallGeom, MATERIALS.WALL);
+                    wallMesh.rotation.x = Math.PI / 2; 
+                    wallMesh.position.y = floorLevel; 
+                    wallMesh.castShadow = true;
+                    wallMesh.receiveShadow = true;
+                    houseMesh.add(wallMesh);
+
+                    // 3. Dividing Slab
+                    if (floor < floorCount - 1) {
+                        const middleSlab = new THREE.Mesh(slabGeom.clone(), MATERIALS.FLOOR);
+                        if (homeShape === 'donut') {
+                            middleSlab.rotation.x = -Math.PI / 2;
+                            middleSlab.position.y = floorLevel + floorHeight + slabThickness;
+                        } else {
+                            middleSlab.position.y = floorLevel + floorHeight + slabThickness / 2;
+                        }
+                        middleSlab.castShadow = true;
+                        middleSlab.receiveShadow = true;
+                        houseMesh.add(middleSlab);
+                    }
+                }
+
+                // 4. Roof
+                const roofLevelY = (slabThickness) + (floorCount * (floorHeight + slabThickness));
+                const roofHeight = floorHeight * 0.7;
+                
+                if (shape.startsWith('pitched')) { 
+                    const roofGeom = new THREE.ConeGeometry(outerRadius, roofHeight, 64);
+                    houseMesh.add(createMesh(roofGeom, MATERIALS.ROOF, 0, (homeShape === 'donut' ? roofLevelY : roofLevelY - slabThickness/2) + roofHeight / 2, 0));
+                } else {
+                    // Flat Roof (Cylinder or Ring)
+                    const flatRoof = new THREE.Mesh(slabGeom.clone(), MATERIALS.ROOF);
+                    if (homeShape === 'donut') {
+                        flatRoof.rotation.x = -Math.PI / 2;
+                        flatRoof.position.y = roofLevelY;
+                    } else {
+                        flatRoof.position.y = roofLevelY - slabThickness/2;
+                    }
+                    flatRoof.castShadow = true;
+                    flatRoof.receiveShadow = true;
+                    houseMesh.add(flatRoof);
+                }
+            
+            } else if (homeShape === 'l_shape') {
+                // --- L-Shape Structure ---
+                
+                const shapePoints = l_shape_outer;
+                const holePoints = l_shape_hole;
+                
+                const wallExtrudeSettings = { steps: 1, depth: floorHeight, bevelEnabled: false };
+                const slabExtrudeSettings = { steps: 1, depth: slabThickness, bevelEnabled: false };
+
+                const wallGeom = createHollowExtrude(shapePoints, holePoints, wallExtrudeSettings);
+                const slabGeom = createHollowExtrude(shapePoints, null, slabExtrudeSettings); // Slabs are solid
+
+                // 1. Initial Floor Slab
+                const baseFloor = new THREE.Mesh(slabGeom, MATERIALS.FLOOR);
+                baseFloor.rotation.x = -Math.PI / 2;
+                baseFloor.position.y = GROUND_Y + slabThickness;
+                baseFloor.castShadow = true;
+                baseFloor.receiveShadow = true;
+                houseMesh.add(baseFloor);
+
+                for (let floor = 0; floor < floorCount; floor++) {
+                    const floorLevel = (slabThickness) + (floor * (floorHeight + slabThickness));
+                    
+                    // 2. Exterior Walls
+                    const wallMesh = new THREE.Mesh(wallGeom, MATERIALS.WALL);
+                    wallMesh.rotation.x = Math.PI / 2; 
+                    wallMesh.position.y = floorLevel; 
+                    wallMesh.castShadow = true;
+                    wallMesh.receiveShadow = true;
+                    houseMesh.add(wallMesh);
+
+                    // 3. Dividing Slab
+                    if (floor < floorCount - 1) {
+                        const middleSlab = new THREE.Mesh(slabGeom.clone(), MATERIALS.FLOOR);
+                        middleSlab.rotation.x = -Math.PI / 2;
+                        middleSlab.position.y = floorLevel + floorHeight + slabThickness;
+                        middleSlab.castShadow = true;
+                        middleSlab.receiveShadow = true;
+                        houseMesh.add(middleSlab);
+                    }
+                }
+                
+                // 4. Roof
+                const roofLevelY = (slabThickness) + (floorCount * (floorHeight + slabThickness)) - slabThickness; // Top of last wall
+                const roofHeight = floorHeight * 0.7; 
+                
+                if (shape === 'pitched_pyramid') {
+                    const roofGeom = new THREE.ConeGeometry(Math.max(length, width) / 2, roofHeight, 4);
+                    const roof = createMesh(roofGeom, MATERIALS.ROOF, 0, roofLevelY + roofHeight / 2, 0);
+                    roof.rotation.y = Math.PI / 4;
+                    houseMesh.add(roof);
+
+                } else if (shape === 'pitched_gable') {
+                    const roofGeom = new THREE.BufferGeometry();
+                    const baseOuterL = halfLength;
+                    const baseOuterW = halfWidth;
+                    
+                    const vertices = new Float32Array( [
+                        -baseOuterL, 0,  baseOuterW, 
+                         baseOuterL, 0,  baseOuterW, 
+                        -baseOuterL, 0, -baseOuterW, 
+                         baseOuterL, 0, -baseOuterW, 
+                        -baseOuterL, roofHeight, 0, 
+                         baseOuterL, roofHeight, 0  
+                    ] );
+                    const indices = [ 0, 1, 5,   0, 5, 4, 2, 3, 5,   2, 5, 4, 0, 2, 4, 1, 3, 5 ];
+                    
+                    roofGeom.setIndex( indices );
+                    roofGeom.setAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+                    roofGeom.computeVertexNormals(); 
+                    
+                    const roof = new THREE.Mesh(roofGeom, MATERIALS.ROOF);
+                    roof.position.y = roofLevelY; 
+                    roof.castShadow = true;
+                    roof.receiveShadow = true;
+                    houseMesh.add(roof);
+                } else {
+                    // Flat Roof (L-Shape)
+                    const flatRoof = new THREE.Mesh(slabGeom.clone(), MATERIALS.ROOF);
+                    flatRoof.rotation.x = -Math.PI / 2;
+                    flatRoof.position.y = roofLevelY + slabThickness;
+                    flatRoof.castShadow = true;
+                    flatRoof.receiveShadow = true;
+                    houseMesh.add(flatRoof);
+                }
+            }
+        }
+
+        /** Creates the outer compound wall */
+        function createCompoundWall(length, width, houseWallThickness, wallDistance, wallHeight, homeShape) {
+            const compoundWallMat = MATERIALS.COMPOUND_WALL;
+            const compoundWallThickness = 0.2; // All compound walls are this thick
+            const wallY = GROUND_Y + wallHeight / 2;
+
+            if (homeShape === 'rectangular' || homeShape === 'l_shape') {
+                // Build a wall around the bounding box
+                const hL_pos = length / 2 + houseWallThickness + wallDistance; // Position of left/right walls
+                const hW_pos = width / 2 + houseWallThickness + wallDistance; // Position of front/back walls
+
+                const wallLenX = (length + 2*houseWallThickness) + 2 * wallDistance + compoundWallThickness;
+                const wallLenZ = (width + 2*houseWallThickness) + 2 * wallDistance + compoundWallThickness;
+
+                const wallGeomX = new THREE.BoxGeometry(wallLenX, wallHeight, compoundWallThickness);
+                const wallGeomZ = new THREE.BoxGeometry(compoundWallThickness, wallHeight, wallLenZ);
+
+                houseMesh.add(createMesh(wallGeomX, compoundWallMat, 0, wallY, hW_pos)); // Front
+                houseMesh.add(createMesh(wallGeomX, compoundWallMat, 0, wallY, -hW_pos)); // Back
+                houseMesh.add(createMesh(wallGeomZ, compoundWallMat, hL_pos, wallY, 0)); // Right
+                houseMesh.add(createMesh(wallGeomZ, compoundWallMat, -hL_pos, wallY, 0)); // Left
+
+            } else if (homeShape === 'circular' || homeShape === 'donut') {
+                // Build a circular wall
+                let houseOuterRadius = (homeShape === 'donut') ? length / 2 : (length / 2) + houseWallThickness;
+                
+                const outerR = houseOuterRadius + wallDistance;
+                const innerR = outerR - compoundWallThickness;
+
+                const wallShape = new THREE.Shape();
+                wallShape.absarc(0, 0, outerR, 0, Math.PI * 2, false); 
+                const wallHole = new THREE.Path();
+                wallHole.absarc(0, 0, innerR, 0, Math.PI * 2, true); 
+                wallShape.holes.push(wallHole);
+                
+                const extrudeSettings = { steps: 1, depth: wallHeight, bevelEnabled: false };
+                const wallGeom = new THREE.ExtrudeGeometry(wallShape, extrudeSettings);
+                
+                const wallMesh = new THREE.Mesh(wallGeom, compoundWallMat);
+                wallMesh.rotation.x = Math.PI / 2; 
+                wallMesh.position.y = GROUND_Y; // Position at the base
+                wallMesh.castShadow = true;
+                wallMesh.receiveShadow = true;
+                houseMesh.add(wallMesh);
+            }
+        }
+
+
+        /** Calculates and displays construction metrics */
+        function calculateAndDisplay(length, width, totalHeight, floorCount, roomCount, homeShape, wallThickness) {
+            let footprintArea = 0;
+            let wallSurfaceArea = 0;
+
+            if (homeShape === 'rectangular') {
+                footprintArea = length * width;
+                const perimeter = 2 * (length + width);
+                wallSurfaceArea = perimeter * totalHeight; 
+            } else if (homeShape === 'circular') {
+                const innerRadius = length / 2;
+                footprintArea = Math.PI * Math.pow(innerRadius, 2);
+                const perimeter = 2 * Math.PI * innerRadius; // Inner perimeter
+                wallSurfaceArea = perimeter * totalHeight;
+            } else if (homeShape === 'donut') {
+                const outerRadius = length / 2;
+                const innerRadius = width / 2;
+                footprintArea = (Math.PI * Math.pow(outerRadius, 2)) - (Math.PI * Math.pow(innerRadius, 2));
+                const outerPerimeter = 2 * Math.PI * outerRadius;
+                const innerPerimeter = 2 * Math.PI * innerRadius;
+                wallSurfaceArea = (outerPerimeter + innerPerimeter) * totalHeight; 
+            } else if (homeShape === 'l_shape') {
+                // Area = (L * W) - (top-right-quadrant) = 3/4 of total
+                footprintArea = (length * width) * 0.75;
+                // Perimeter is 2 * L + 2 * W (same as bounding box)
+                const perimeter = 2 * length + 2 * width;
+                wallSurfaceArea = perimeter * totalHeight;
+            }
+
+            const totalFloorArea = footprintArea * floorCount;
+            let avgRoomArea = 0;
+            if (footprintArea > 0 && roomCount > 0) {
+                 avgRoomArea = footprintArea / roomCount;
+            }
+
+            document.getElementById('floor-out').textContent = floorCount;
+            document.getElementById('footprint-area').textContent = footprintArea.toFixed(2);
+            document.getElementById('floor-area').textContent = totalFloorArea.toFixed(2);
+            document.getElementById('room-area').textContent = avgRoomArea.toFixed(2); 
+            document.getElementById('wall-surface-area').textContent = wallSurfaceArea.toFixed(2);
+        }
+
+        // --- Core 3D Initialization ---
+
+        function initThreeD() {
+            const container = document.getElementById('threeD-container');
+            if (!container) {
+                console.error("3D container not found!");
+                return;
+            }
+
+            // 1. Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xd1d1ff);
+
+            // 2. Renderer (Shadows)
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true; 
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // 3. Camera
+            camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(35, 25, 35); 
+
+            // 4. Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.9); 
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+            sunLight.position.set(50, 80, 50);
+            sunLight.castShadow = true;
+
+            const d = 100;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.camera.near = 1;
+            sunLight.shadow.camera.far = 150;
+            sunLight.shadow.mapSize.width = 1024;
+            sunLight.shadow.mapSize.height = 1024;
+            scene.add(sunLight);
+
+            // 5. Controls (Must use window.THREE.OrbitControls)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 10;
+            controls.maxDistance = 100;
+
+            // 6. Initial Model Load
+            handleShapeChange(); // Call on init
+            updateModel();
+
+            // 7. Animation Loop
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            // 8. Handle Window Resize
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('threeD-container');
+            if (!container || container.clientWidth === 0 || container.clientHeight === 0) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+        
+        /** Updates room config UI based on shape */
+        function updateRoomConfigUI(homeShape) {
+            const room1 = document.getElementById('room-1-wrapper');
+            const room2 = document.getElementById('room-2-wrapper');
+            const room3 = document.getElementById('room-3-wrapper');
+            const room4 = document.getElementById('room-4-wrapper');
+
+            // Reset labels and visibility
+            room1.style.display = 'block';
+            room2.style.display = 'block';
+            room3.style.display = 'block';
+            room4.style.display = 'block';
+            room1.querySelector('label').textContent = 'Room 1 (Top-Left / NW)';
+            room2.querySelector('label').textContent = 'Room 2 (Top-Right / NE)';
+            room3.querySelector('label').textContent = 'Room 3 (Bottom-Right / SE)';
+            room4.querySelector('label').textContent = 'Room 4 (Bottom-Left / SW)';
+            
+            if (homeShape === 'l_shape') {
+                room2.style.display = 'none'; // Hide Room 2
+            } else if (homeShape === 'circular' || homeShape === 'donut') {
+                room1.querySelector('label').textContent = 'Room Segment 1';
+                room2.querySelector('label').textContent = 'Room Segment 2';
+                room3.querySelector('label').textContent = 'Room Segment 3';
+                room4.querySelector('label').textContent = 'Room Segment 4';
+            }
+        }
+
+        /** Updates main UI controls based on shape */
+        function handleShapeChange() {
+            const homeShape = document.getElementById('home_shape').value;
+            
+            const widthLabel = document.getElementById('width_label');
+            const roofSelect = document.getElementById('shape');
+            const roofLabel = document.getElementById('roof_type_label');
+            const internalCheck = document.getElementById('show_internal_walls');
+            const internalLabel = document.getElementById('internal_layout_label');
+            const doorFacingSelect = document.getElementById('door_facing');
+            const doorFacingLabel = document.getElementById('door_facing_label');
+
+            // Reset all to default
+            widthLabel.textContent = "Width (Z)";
+            roofSelect.disabled = false;
+            roofLabel.classList.remove('disabled');
+            internalCheck.disabled = false;
+            internalLabel.classList.remove('disabled');
+            doorFacingSelect.disabled = false;
+            doorFacingLabel.classList.remove('disabled');
+
+            // --- Apply shape-specific rules ---
+            if (homeShape === 'rectangular') {
+                // *** NEW: Label to clarify how to make a square ***
+                widthLabel.textContent = "Width (Z) (set = Length for Square)";
+            } else if (homeShape === 'donut') {
+                widthLabel.textContent = "Hole Diameter";
+                doorFacingSelect.disabled = true;
+                doorFacingLabel.classList.add('disabled');
+            } else if (homeShape === 'l_shape') {
+                widthLabel.textContent = "Total Depth (Z)";
+            } else if (homeShape === 'circular') {
+                widthLabel.textContent = "Width (Z) - Not Used";
+                doorFacingSelect.disabled = true;
+                doorFacingLabel.classList.add('disabled');
+            }
+            
+            // Update the room config panel
+            updateRoomConfigUI(homeShape);
+        }
+
+
+        /** Main function to clear and rebuild the 3D model */
+        function updateModel() {
+            // 1. Get Parameters
+            let shape = document.getElementById('shape').value;
+            let length = parseFloat(document.getElementById('length').value);
+            let width = parseFloat(document.getElementById('width').value);
+            const height = parseFloat(document.getElementById('height').value); 
+            const floorCount = parseInt(document.getElementById('floor_count').value); 
+            const doorCount = parseInt(document.getElementById('door_count').value); 
+            const windowCount = parseInt(document.getElementById('window_count').value); 
+            let roomCount = parseInt(document.getElementById('room_count').value); // 'let' now
+            const wallThickness = parseFloat(document.getElementById('wall_thickness').value);
+            
+            const homeShape = document.getElementById('home_shape').value; 
+            const doorFacing = document.getElementById('door_facing').value;
+            let showInternalLayout = document.getElementById('show_internal_walls').checked;
+
+            const roomTypes = [
+                document.getElementById('room_type_1').value,
+                document.getElementById('room_type_2').value,
+                document.getElementById('room_type_3').value,
+                document.getElementById('room_type_4').value
+            ];
+
+            const showCompoundWall = document.getElementById('show_compound_wall').checked;
+            const compoundWallDistance = parseFloat(document.getElementById('compound_wall_distance').value);
+            const compoundWallHeight = parseFloat(document.getElementById('compound_wall_height').value);
+
+            // --- Force/Check settings based on shape ---
+            if (homeShape === 'l_shape') {
+                if (roomCount > 3) {
+                    roomCount = 3;
+                    document.getElementById('room_count').value = 3;
+                }
+            }
+            if (homeShape === 'donut' && width >= length) {
+                width = length - wallThickness * 2;
+                if (width < 1) width = 1;
+                document.getElementById('width').value = width.toFixed(2);
+            }
+
+
+            if (isNaN(length) || isNaN(width) || isNaN(height) || length <= 0 || width <= 0 || height <= 0 || wallThickness >= length / 2 || wallThickness >= width / 2) {
+                console.error("Invalid dimensions or wall thickness too large.");
+                return;
+            }
+            
+            const totalHeight = height * floorCount;
+            const slabThickness = wallThickness; 
+            
+            // 2. Clear Scene
+            scene.remove(houseMesh);
+            houseMesh.children.forEach(child => {
+                if (child.geometry) child.geometry.dispose();
+            });
+            houseMesh.clear(); 
+            
+            const oldGround = scene.getObjectByName('ground');
+            if (oldGround) {
+                 if (oldGround.geometry) oldGround.geometry.dispose();
+                 scene.remove(oldGround);
+            }
+            let groundSizeL = length;
+            let groundSizeW = width;
+            if (showCompoundWall && compoundWallDistance > 0) {
+                groundSizeL += (compoundWallDistance * 2.5); // Add extra padding
+                groundSizeW += (compoundWallDistance * 2.5);
+            }
+            const ground = createGround(groundSizeL, groundSizeW);
+            ground.name = 'ground';
+            scene.add(ground);
+
+            // 3. Build Exterior Structure (Walls, Floors, Roof)
+            createHouseStructure(length, width, floorCount, height, slabThickness, wallThickness, shape, homeShape);
+            
+            // 4. Add Features Floor by Floor
+            for (let floor = 0; floor < floorCount; floor++) {
+                // Adjust Y level for different build methods
+                let floorLevelY = (slabThickness / 2) + (floor * (height + slabThickness));
+                if (homeShape === 'donut' || homeShape === 'l_shape' || homeShape === 'circular') {
+                    floorLevelY = (slabThickness) + (floor * (height + slabThickness));
+                }
+
+                addDoorsAndWindows(length, width, height, doorCount, windowCount, wallThickness, floorLevelY, doorFacing, homeShape);
+
+                if (showInternalLayout) {
+                    if (homeShape === 'circular' || homeShape === 'donut') {
+                        addRadialInteriorLayout(length, width, height, roomCount, wallThickness, floorLevelY, true, homeShape, roomTypes);
+                    } else {
+                        addInteriorLayout(length, width, height, roomCount, wallThickness, floorLevelY, true, homeShape, roomTypes); 
+                    }
+                }
+            }
+
+            // 5. Add Compound Wall
+            if (showCompoundWall && compoundWallDistance > 0 && compoundWallHeight > 0) {
+                createCompoundWall(length, width, wallThickness, compoundWallDistance, compoundWallHeight, homeShape);
+            }
+            
+            // 6. Calculations Update
+            calculateAndDisplay(length, width, totalHeight, floorCount, roomCount, homeShape, wallThickness);
+            
+            // 7. Add to Scene
+            scene.add(houseMesh);
+
+            // 8. Final Control Update
+            controls.target.set(0, totalHeight / 2, 0); 
+            controls.update(); 
+        }
+
+        // *** NEW: Download Function ***
+        function downloadGLTFModel() {
+            // Check if GLTFExporter is loaded
+            if (typeof THREE.GLTFExporter === 'undefined') {
+                console.error("GLTFExporter script not loaded!");
+                // In a real app, you'd show a user-friendly error message here
+                return;
+            }
+            
+            const exporter = new THREE.GLTFExporter();
+            
+            // Parse the houseMesh group
+            exporter.parse(
+                houseMesh,
+                // On complete
+                function (gltf) {
+                    // Convert the GLTF JSON to a string
+                    const gltfString = JSON.stringify(gltf);
+                    
+                    // Create a blob
+                    const blob = new Blob([gltfString], { type: 'application/json' });
+                    
+                    // Create a download link
+                    const link = document.createElement('a');
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'house-model.gltf';
+                    link.click();
+                    
+                    // Clean up
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+                },
+                // On error
+                function (error) {
+                    console.error('An error occurred during GLTF export:', error);
+                }
+            );
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.getElementById('updateModel').addEventListener('click', updateModel);
+            
+            // *** NEW: Download button listener ***
+            document.getElementById('downloadModel').addEventListener('click', downloadGLTFModel);
+            
+            document.getElementById('home_shape').addEventListener('change', () => {
+                handleShapeChange();
+                updateModel();
+            });
+
+            const internalCheck = document.getElementById('show_internal_walls');
+            const roomConfigPanel = document.getElementById('room-config-panel');
+            internalCheck.addEventListener('change', () => {
+                roomConfigPanel.style.display = internalCheck.checked ? 'block' : 'none';
+                updateModel(); // Update model when toggling layout
+            });
+            // Initial state
+            roomConfigPanel.style.display = internalCheck.checked ? 'block' : 'none';
+            
+            // Add listeners to new room dropdowns
+            document.querySelectorAll('.room-type-select').forEach(item => {
+                item.addEventListener('change', updateModel);
+            });
+
+            // Live updates on key controls
+            document.getElementById('shape').addEventListener('change', updateModel);
+            document.getElementById('floor_count').addEventListener('change', updateModel);
+            document.getElementById('length').addEventListener('input', updateModel);
+            document.getElementById('width').addEventListener('input', updateModel); 
+            document.getElementById('height').addEventListener('input', updateModel);
+            document.getElementById('room_count').addEventListener('input', updateModel);
+            document.getElementById('door_count').addEventListener('input', updateModel);
+            document.getElementById('window_count').addEventListener('input', updateModel);
+            document.getElementById('door_facing').addEventListener('change', updateModel);
+
+            // Listeners for compound wall
+            document.getElementById('show_compound_wall').addEventListener('change', updateModel);
+            document.getElementById('compound_wall_distance').addEventListener('input', updateModel);
+            document.getElementById('compound_wall_height').addEventListener('input', updateModel);
+
+            // Initialize the 3D scene
+            initThreeD();
+        });
+    </script>
+</body>
+</html>
